@@ -7,7 +7,7 @@ from torch.nn import functional as F
 from torch.autograd import grad
 from tqdm import tqdm
 from torch_influence import BaseObjective, LiSSAInfluenceModule
-from src import train, train_pbrf, mean_validation_loss, DataLoader, GNN, make_metric_fns, make_dirs
+from src import train, train_pbrf, mean_validation_loss, DataLoader, GNN, make_metric_fns
 from src.graph_utils import *
 from src.utils import *
 import argparse

@@ -341,6 +341,7 @@ def make_dirs(args):
     vanilla_model_dir = osp.join('checkpoints', "vanilla", model_hparams, learning_hparams)
 
     result_root = osp.join('results', args.hessian_type, args.eval_metric, model_hparams, calculate_hparams)
+    os.makedirs(vanilla_model_dir, exist_ok=True)
     os.makedirs(result_root, exist_ok=True)
     
     loo_model_root = osp.join('checkpoints', 'loo_checkpoints', model_hparams, calculate_hparams)
@@ -387,7 +388,7 @@ def rename_result_dir(args, retrain_inf, retrain_pbrf, perturb_inf, perturb_pbrf
         retrain_corr = torch.corrcoef(torch.stack((torch_retrain_inf, torch_retrain_pbrf)))[0, 1]
         perturb_corr = torch.corrcoef(torch.stack((torch_perturb_inf, torch_perturb_pbrf)))[0, 1]
         l2_error = torch.norm(torch_retrain_inf - torch_retrain_pbrf, p=2).item()
-        new_save_dir = osp.join(dirs['result_root'], f'{retrain_corr:.2f}_{l2_error:.4f}_{perturb_corr:.2f}_{dirs['result_id']}')
+        new_save_dir = osp.join(dirs['result_root'], f"{retrain_corr:.2f}_{l2_error:.4f}_{perturb_corr:.2f}_{dirs['result_id']}")
         shutil.move(dirs['result'], new_save_dir)
         dirs['result'] = new_save_dir
 
