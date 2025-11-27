@@ -514,8 +514,8 @@ if __name__ == '__main__':
     parser.add_argument('--pbrf_epochs', type=int, default=1000)
     parser.add_argument('--pbrf_weight_decay', type=float, default=0.0)
     parser.add_argument("--element_type", type=str, default='edge_edit', choices=['edge_removal', 'edge_insertion', 'edge_edit'])
-    parser.add_argument("--num_insertion_candidates", type=int, default=10)
-    parser.add_argument("--num_removal_candidates", type=int, default=10)
+    parser.add_argument("--num_insertion_candidates", type=int, default=50)
+    parser.add_argument("--num_removal_candidates", type=int, default=50)
     parser.add_argument("--num_heads", type=int, default=8)
     parser.add_argument("--check_runtime", type=int, default=0)
     parser.add_argument("--json_config", type=str, default="none")
@@ -665,6 +665,7 @@ if __name__ == '__main__':
             r_size = len(r_total_pbrf)
         else:
             total_pbrf, retrain_pbrf, perturb_pbrf = get_pbrf(args, model, data, candidates, seed, dirs, args.element_type)
+            r_size = None
         
         rename_result_dir(args, retrain_inf, retrain_pbrf, perturb_inf, perturb_pbrf, dirs)
         k=2
