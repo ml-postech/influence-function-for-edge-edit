@@ -1,7 +1,8 @@
 import torch
-from src import GNN, DataLoader, train, eval_model
-from src.utils import set_seed, random_planetoid_splits
-from improve_gnns import get_edge_removal_candidates, get_edge_insertion_candidates, get_influence
+from src import GNN, DataLoader, train, eval_model, make_metric_fns
+from src.utils import set_seed, random_planetoid_splits, get_edge_removal_candidates, get_edge_insertion_candidates, get_eval_node_idxs
+from src.graph_utils import find_k_hop_neighborhoods
+from calculate_influence import GraphInfluenceModule
 import torch.optim as optim
 import os.path as osp
 
@@ -29,11 +30,10 @@ if __name__ == "__main__":
     parser.add_argument('--scale', type=float, default=1.0)
     parser.add_argument('--lissa_iter', type=int, default=10000)
     parser.add_argument('--pbrf_weight_decay', type=float, default=0.0)
+    parser.add_argument('--eval_metric', type=str, default='mean_validation_loss', choices=['dirichlet_energy', 'feature_ablation', 'mean_validation_loss'])
     parser.add_argument("--num_folds", type=int, default=1)
-    parser.add_argument("--num_insertion_candidates", type=int, default=10000)
-    parser.add_argument("--num_removal_candidates", type=int, default=10000)
-    parser.add_argument("--insertion_ratio", type=float, default=0.1)
-    parser.add_argument("--removal_ratio", type=float, default=0.1)
+    parser.add_argument("--num_insertion_candidates", type=int, default=100)
+    parser.add_argument("--num_removal_candidates", type=int, default=100)
     
     args = parser.parse_args()
     args.linear = bool(args.linear)
@@ -100,10 +100,37 @@ if __name__ == "__main__":
     model.load_state_dict(ori_best_state_dict)
 
     set_seed(seed)
+
+    # Get eval node indices for the metric
+    eval_node_idxs = get_eval_node_idxs(data, args.eval_metric, seed)
+
+    # Get exact k-hop neighbors if needed
+    if args.eval_metric == "feature_ablation":
+        exact_k_hop_neighbors = find_k_hop_neighborhoods(data, args.num_layers)
+    else:
+        exact_k_hop_neighbors = None
+
+    # Create metric functions
+    metric_fns = make_metric_fns(eval_node_idxs, exact_k_hop_neighbors, data.edge_index)
+    metric_fn = metric_fns[args.eval_metric]
+
     # Set the edge candidates for removal and insertion
     removal_candidates = get_edge_removal_candidates(data, args.num_removal_candidates)
     insertion_candidates = get_edge_insertion_candidates(data, args.num_insertion_candidates)
-    # Calculate the influence function
-    checkpoint_dir = osp.join('checkpoints', args.dataset, f"{args.model}_{args.num_layers}_{args.hidden_dim}_{args.linear}_{args.bias}", f"{args.lr}_{args.epochs}_{args.weight_decay}")
-    mvl_removal_inf, mvl_insertion_inf = get_influence(model, data, args, checkpoint_dir, seed, device, "mean_validation_loss", num_folds=args.num_folds, insertion_candidates=insertion_candidates, removal_candidates=removal_candidates)
-    print(1)
+
+    # Reshape candidates to have batch dimension of 1 edge per batch
+    removal_candidates = removal_candidates.view(-1, 1, 2)
+    insertion_candidates = insertion_candidates.view(-1, 1, 2)
+
+    # Calculate the influence function using GraphInfluenceModule
+    print("Calculating influence for edge removal...")
+    influence_module = GraphInfluenceModule(model, data, args, args.eval_metric, args.num_folds, eval_node_idxs, metric_fn)
+    mvl_removal_inf, removal_retrain_inf, removal_perturb_inf, scale, inv_hvp_norm, avg_influenced = influence_module.calculate_influence(removal_candidates, 'edge_removal')
+
+    print("Calculating influence for edge insertion...")
+    mvl_insertion_inf, insertion_retrain_inf, insertion_perturb_inf, scale, inv_hvp_norm, avg_influenced = influence_module.calculate_influence(insertion_candidates, 'edge_insertion')
+
+    print(f"Removal influence shape: {mvl_removal_inf.shape}")
+    print(f"Insertion influence shape: {mvl_insertion_inf.shape}")
+    print(f"Average removal influence: {mvl_removal_inf.mean():.6f}")
+    print(f"Average insertion influence: {mvl_insertion_inf.mean():.6f}")
